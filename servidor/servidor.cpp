@@ -3,21 +3,26 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
-
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <netdb.h>
 #include <time.h>
 #include <string.h>
 #include <errno.h>
+#include <arpa/inet.h>
 
-#define PORT 6325
+// #define PORT 6325
+#define BUFLEN 512  //Max length of buffer
+#define PORT 8888   //The port on which to listen for incoming data
 
 int cont, src, dest, opcao;
 char arquivo[100];
-int buffer [2048];
+char buffer [2048];
 int sock,length,s0;
-struct sockaddr_in server;
+struct sockaddr_in si_me, si_other;
+int s, i, slen = sizeof(si_other) , recv_len;
+char buf[BUFLEN];
+char operacao[1];
 
 int download(){
     dest = creat(arquivo, 0666);
@@ -27,10 +32,16 @@ int download(){
     }
 
     printf("Download Iniciado\n");
-    while ((cont = recv(s0, &buffer, sizeof(buffer), 0)) > 0 ){
-        write(dest, &buffer, cont);
-    }
-    printf("Download Concluido\n");
+
+    do {
+        recv_len = recvfrom(s, buffer, BUFLEN, 0, (struct sockaddr *) &si_other, (socklen_t*) &slen);
+        fflush(stdout);
+        memset(buf,'\0', BUFLEN);
+        printf("%s\n", buffer);
+        printf("%d\n", recv_len);
+        write(dest, &buffer, recv_len);
+    } while (recv_len > 0);
+    
     return 0;
 }
 
@@ -44,61 +55,65 @@ int upload(){
 
     printf("Upload Iniciado\n");
     while ((cont = read(src, &buffer, sizeof(buffer))) > 0 ){
-        send(s0, &buffer, sizeof(buffer), 0);
+        printf("%s\n", buffer);
+        sendto(s, buffer, strlen(buffer) , 0 , (struct sockaddr *) &si_other, slen);
     }
     printf("Upload Concluido\n");
 
     return 0;
 }
 
+void die(char *s){
+    perror(s);
+    exit(1);
+}
+
 int main (int argc, char *argv[]) {
-    int operacao;
-    
-    sock = socket(AF_INET, SOCK_STREAM, 0); 
-        if (sock < 0) {
-            perror("opening stream socket");
-            exit(0);
-        }
-    //FIM SOCKET
+     
+    //create a UDP socket
+    if ((s=socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)) == -1)
+    {
+        die("socket");
+    }
+     
+    // zero out the structure
+    memset((char *) &si_me, 0, sizeof(si_me));
+     
+    si_me.sin_family = AF_INET;
+    si_me.sin_port = htons(PORT);
+    si_me.sin_addr.s_addr = htonl(INADDR_ANY);
+     
+    //bind socket to port
+    if( bind(s , (struct sockaddr*)&si_me, sizeof(si_me) ) == -1)
+    {
+        die("bind");
+    }
 
-    //2:BIND
-    bzero(&server, sizeof(server));
-    server.sin_family = AF_INET;
-    server.sin_addr.s_addr = INADDR_ANY;
-    server.sin_port = htons (PORT);
-    length = sizeof (server);
-        if (bind(sock, (struct sockaddr *)&server, length) < 0){
-            perror("binding stream socket");
-            exit(0);
-        }
-    //FIM BIND
-
-    //3:LISTEN
-    listen(sock,5);
-    printf("Servidor: Aguardando conexao!\n");  
-    //FIM LISTEN
-
-    //4:ACCEPT;
-    s0 = accept(sock,(struct sockaddr *)0,0);  
-    printf("Servidor: Conexões estabelecidas!\n");  
-
+    fflush(stdout);
+        
     printf("Esperando Operação\n");
-    recv(s0, &operacao, sizeof(operacao), 0); 
-    if(operacao == 1){
+
+    recv_len = recvfrom(s, operacao, BUFLEN, 0, (struct sockaddr *) &si_other, (socklen_t*) &slen);
+
+    if(operacao[0] == '1'){
         printf("Download requisitado\n");
-    } else if(operacao == 2){
+    } else if(operacao[0] == '2'){
         printf("Upload requisitado\n");
     }
+
+    fflush(stdout);
+    memset(buf,'\0', BUFLEN);
+
     printf("Esperando nome do arquivo\n");
-    recv(s0, &arquivo, sizeof(arquivo), 0); 
+    recv_len = recvfrom(s, arquivo, BUFLEN, 0, (struct sockaddr *) &si_other, (socklen_t*) &slen);
     printf("Nome de arquivo %s recebido\n", arquivo);
 
-    switch (operacao){
-        case 1:
+    switch (operacao[0]){
+        case '1':
             upload();
             break;
 
-        case 2:
+        case '2':
             download();
             break;
         

@@ -3,7 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
-
+#include <iostream>
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <netdb.h>
@@ -14,15 +14,23 @@
 #include <arpa/inet.h>
 #include <netinet/in.h>
 
-#define PORT 6325
+using namespace std;
 
-#define IP_SERVER "172.17.0.2"
+// #define PORT 6325
+// #define IP_SERVER "172.20.20.206"
+
+#define SERVER "127.0.0.1"
+#define BUFLEN 512  //Max length of buffer
+#define PORT 8888   //The port on which to send data
 
 int s0;
-struct sockaddr_in server;
-int cont, src, dest, opcao;
+struct sockaddr_in si_other;
+int cont, src, dest;
 char arquivo[100];
-int buffer [2048];
+char confirma[1];
+char buffer[2048];
+int s, i, slen = sizeof(si_other) , recv_len;
+char buf[BUFLEN];
 
 int upload(){ // Upload do cliente envia arquivo para o servidor
     src = open(arquivo,O_RDONLY);
@@ -34,7 +42,8 @@ int upload(){ // Upload do cliente envia arquivo para o servidor
 
     printf("Upload Iniciado\n");
     while ((cont = read(src, &buffer, sizeof(buffer))) > 0 ){
-        send(s0, &buffer, sizeof(buffer), 0);
+        printf("%s\n", buffer);
+        sendto(s, buffer, strlen(buffer) , 0 , (struct sockaddr *) &si_other, slen);
     }
     printf("Upload Concluido\n");
     return 0;
@@ -48,32 +57,43 @@ int download(){ // Download do cliente, recebe arquivo do servidor
     }
 
     printf("Download Iniciado\n");
-    while ((cont = recv(s0, &buffer, sizeof(buffer), 0)) > 0 ){
-        write(dest, &buffer, cont);
-    }
+    do {
+        recv_len = recvfrom(s, buffer, BUFLEN, 0, (struct sockaddr *) &si_other, (socklen_t*) &slen);
+        fflush(stdout);
+        memset(buf,'\0', BUFLEN);
+        printf("%s\n", buffer);
+        printf("%d\n", recv_len);
+        write(dest, &buffer, recv_len);
+    } while (recv_len > 0);
+
     printf("Download Concluido\n");
     return 0;
 }
 
+void die(char *s) {
+    perror(s);
+    exit(1);
+}
+
 int main (int argc, char *argv[]) {
+    char message[BUFLEN];
+    char opcao[1];
+    confirma[0] = 1;
+ 
+    if ( (s=socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)) == -1)
+    {
+        die("socket");
+    }
+ 
+    memset((char *) &si_other, 0, sizeof(si_other));
     
-    //1:SOCKET
-    s0=socket(AF_INET, SOCK_STREAM, 0);
-        if (s0<0){
-            perror("opening stream socket");
-            exit(1);
-        }
-    //1:FIM SOCKET
-
-    //2:CONEXAO COM SERVIDOR
-    bzero(&server, sizeof(server)) ;
-    server.sin_family = AF_INET ;
-    server.sin_port = htons(PORT) ;
-    server.sin_addr.s_addr = inet_addr(IP_SERVER);
-
-    if (connect(s0, (struct sockaddr *) &server, sizeof(server))){
-        perror("connectando stream socket");
-        exit(0);
+    si_other.sin_family = AF_INET;
+    si_other.sin_port = htons(PORT);
+     
+    if (inet_aton(SERVER , &si_other.sin_addr) == 0) 
+    {
+        fprintf(stderr, "inet_aton() failed\n");
+        exit(1);
     }
 
     printf("Cliente Conectado!\n");
@@ -81,18 +101,21 @@ int main (int argc, char *argv[]) {
     printf("Digite a opção desejada\n");
     printf("1 - Download\n");
     printf("2 - Upload\n");
-    scanf("%d", &opcao);
-    send(s0, &opcao, sizeof(opcao), 0);
+    scanf("%c", &opcao);
+
+    sendto(s, opcao, strlen(opcao) , 0 , (struct sockaddr *) &si_other, slen);
+
     printf("Digite o nome do arquivo: ");
     scanf("%s",arquivo);
-    send(s0, &arquivo, sizeof(arquivo), 0);
+    memset(buf,'\0', BUFLEN);
+    sendto(s, arquivo, strlen(arquivo) , 0 , (struct sockaddr *) &si_other, slen);
     
-    switch (opcao){
-        case 1:
+    switch (opcao[0]){
+        case '1':
             download();
             break;
 
-        case 2:
+        case '2':
             upload();
             break;
         
