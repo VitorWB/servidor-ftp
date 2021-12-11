@@ -20,33 +20,45 @@ using namespace std;
 // #define IP_SERVER "172.20.20.206"
 
 #define SERVER "127.0.0.1"
-#define BUFLEN 512  //Max length of buffer
+#define BUFLEN 12  //Max length of buffer
 #define PORT 8888   //The port on which to send data
 
 struct sockaddr_in si_other;
 int cont, src, dest;
 char arquivo[100];
-char buffer[BUFLEN];
 int s, slen = sizeof(si_other) , recv_len;
+struct bufferStruct{
+    int id; // identifica a ordem do bloco
+    int ack = 0;
+    int flag = 0; // se o bloco esta livre ou ocupado, 1 é ocupado, 0 é livre
+    char conteudo[BUFLEN]; // conteudo do bloco
+};
+
+bufferStruct buffer[5];
 
 int upload(){ // Upload do cliente envia arquivo para o servidor
+    int i = 0;
     src = open(arquivo,O_RDONLY);
-
     if (src == -1){
         printf("Impossivel abrir o arquivo %s\n", arquivo);
         exit (1); 
     }
 
     printf("Upload Iniciado\n");
-    while ((cont = read(src, &buffer, sizeof(buffer))) > 0 ){
-        printf("%s\n", buffer);
-        sendto(s, buffer, strlen(buffer) , 0 , (struct sockaddr *) &si_other, slen);
+    while ((cont = read(src, &buffer[i].conteudo, sizeof(buffer[i].conteudo))) > 0 ){
+        buffer[i].id = i;
+        buffer[i].flag = 1;
+        printf("%s\n", buffer[i].conteudo);
+        sendto(s,&buffer[i], sizeof(buffer[i]) , 0 , (struct sockaddr *) &si_other, slen);
+        i++;
     }
+    sendto(s, 0, 0 , 0 , (struct sockaddr *) &si_other, slen);
     printf("Upload Concluido\n");
     return 0;
 }
 
 int download(){ // Download do cliente, recebe arquivo do servidor
+    int i = 0;
     dest = creat(arquivo, 0666);
     if (dest == -1){
         printf(" Impossivel criar o arquivo %s\n", arquivo); 
@@ -55,12 +67,15 @@ int download(){ // Download do cliente, recebe arquivo do servidor
 
     printf("Download Iniciado\n");
     do {
-        fflush(stdout);
-        memset(buffer,'\0', BUFLEN);
-        recv_len = recvfrom(s, buffer, BUFLEN, 0, (struct sockaddr *) &si_other, (socklen_t*) &slen);
-        printf("%s\n", buffer);
-        printf("%d\n", recv_len);
-        write(dest, &buffer, recv_len);
+        recv_len = recvfrom(s, &buffer[i], sizeof(buffer[i]), 0, (struct sockaddr *) &si_other, (socklen_t*) &slen);
+
+        printf("id: %d\n", buffer[i].id);
+        printf("flag: %d\n", buffer[i].flag);
+        printf("ack: %d\n", buffer[i].ack);
+        printf("Conteudo: %s\n", buffer[i].conteudo);
+
+        write(dest, &buffer[i].conteudo, strlen(buffer[i].conteudo));
+        i++;
     } while (recv_len > 0);
 
     printf("Download Concluido\n");
