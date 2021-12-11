@@ -23,14 +23,11 @@ using namespace std;
 #define BUFLEN 512  //Max length of buffer
 #define PORT 8888   //The port on which to send data
 
-int s0;
 struct sockaddr_in si_other;
 int cont, src, dest;
 char arquivo[100];
-char confirma[1];
-char buffer[2048];
-int s, i, slen = sizeof(si_other) , recv_len;
-char buf[BUFLEN];
+char buffer[BUFLEN];
+int s, slen = sizeof(si_other) , recv_len;
 
 int upload(){ // Upload do cliente envia arquivo para o servidor
     src = open(arquivo,O_RDONLY);
@@ -58,9 +55,9 @@ int download(){ // Download do cliente, recebe arquivo do servidor
 
     printf("Download Iniciado\n");
     do {
-        recv_len = recvfrom(s, buffer, BUFLEN, 0, (struct sockaddr *) &si_other, (socklen_t*) &slen);
         fflush(stdout);
-        memset(buf,'\0', BUFLEN);
+        memset(buffer,'\0', BUFLEN);
+        recv_len = recvfrom(s, buffer, BUFLEN, 0, (struct sockaddr *) &si_other, (socklen_t*) &slen);
         printf("%s\n", buffer);
         printf("%d\n", recv_len);
         write(dest, &buffer, recv_len);
@@ -76,12 +73,9 @@ void die(char *s) {
 }
 
 int main (int argc, char *argv[]) {
-    char message[BUFLEN];
     char opcao[1];
-    confirma[0] = 1;
  
-    if ( (s=socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)) == -1)
-    {
+    if ( (s=socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)) == -1) {
         die("socket");
     }
  
@@ -107,7 +101,6 @@ int main (int argc, char *argv[]) {
 
     printf("Digite o nome do arquivo: ");
     scanf("%s",arquivo);
-    memset(buf,'\0', BUFLEN);
     sendto(s, arquivo, strlen(arquivo) , 0 , (struct sockaddr *) &si_other, slen);
     
     switch (opcao[0]){

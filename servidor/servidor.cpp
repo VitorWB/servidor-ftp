@@ -17,10 +17,9 @@
 
 int cont, src, dest, opcao;
 char arquivo[100];
-char buffer [2048];
-int sock,length,s0;
+char buffer [BUFLEN];
 struct sockaddr_in si_me, si_other;
-int s, i, slen = sizeof(si_other) , recv_len;
+int s, slen = sizeof(si_other) , recv_len;
 char buf[BUFLEN];
 char operacao[1];
 
@@ -34,9 +33,9 @@ int download(){
     printf("Download Iniciado\n");
 
     do {
-        recv_len = recvfrom(s, buffer, BUFLEN, 0, (struct sockaddr *) &si_other, (socklen_t*) &slen);
         fflush(stdout);
-        memset(buf,'\0', BUFLEN);
+        memset(buffer,'\0', BUFLEN);
+        recv_len = recvfrom(s, buffer, BUFLEN, 0, (struct sockaddr *) &si_other, (socklen_t*) &slen);
         printf("%s\n", buffer);
         printf("%d\n", recv_len);
         write(dest, &buffer, recv_len);
@@ -102,7 +101,6 @@ int main (int argc, char *argv[]) {
     }
 
     fflush(stdout);
-    memset(buf,'\0', BUFLEN);
 
     printf("Esperando nome do arquivo\n");
     recv_len = recvfrom(s, arquivo, BUFLEN, 0, (struct sockaddr *) &si_other, (socklen_t*) &slen);
